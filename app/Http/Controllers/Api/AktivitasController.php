@@ -20,7 +20,8 @@ class AktivitasController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = AktivitasMagang::with(['user:id,name,email'])
+        $query = AktivitasMagang::where('status', 'active')
+            ->with(['user:id,name,email'])
             ->withCount('komentar');
 
         if ($request->has('search') && !empty($request->search)) {
@@ -55,7 +56,7 @@ class AktivitasController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $aktivitas = AktivitasMagang::with([
+        $aktivitas = AktivitasMagang::where('status', 'active')->with([
             'user:id,name,email',
             'komentar.user:id,name,email'
         ])->find($id);

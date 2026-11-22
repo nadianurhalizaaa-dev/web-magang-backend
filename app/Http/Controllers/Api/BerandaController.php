@@ -42,7 +42,7 @@ class BerandaController extends Controller
                     'alamat' => $profil->alamat,
                     'email' => $profil->email,
                     'telepon' => $profil->telepon,
-                    'website' => $profil->website,
+                    'instagram' => $profil->instagram,
                 ] : null,
                 'statistik' => [
                     'total_alumni' => $totalAlumni,
@@ -151,9 +151,9 @@ class BerandaController extends Controller
         }
 
         $komentar = KomentarAplikasi::create([
-            'user_id' => $user ? $user->id : null,
-            'nama_pengguna' => $request->nama_pengguna ?? ($user ? $user->name : 'Pengguna App'),
-            'email' => $request->email ?? ($user ? $user->email : null),
+            'user_id' => $user->id,
+            'nama_pengguna' => $user->name,
+            'email' => $user->email,
             'rating' => $request->rating,
             'komentar' => $request->komentar,
             'status' => 'published',

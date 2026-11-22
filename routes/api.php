@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\Api\AktivitasController as ApiAktivitasController;
+use App\Http\Controllers\Api\AdminLandingPageController;
 use App\Http\Controllers\Api\AttendanceScheduleController;
 use App\Http\Controllers\Api\AuthController as ApiAuthController;
 use App\Http\Controllers\Api\BerandaController as ApiBerandaController;
+use App\Http\Controllers\Api\CompressionSettingsController;
 use App\Http\Controllers\Api\LaporanMagangController;
 use App\Http\Controllers\Api\LokasiAbsensiController;
 use App\Http\Controllers\Api\MasterPenilaianController;
@@ -35,7 +37,7 @@ Route::get('/beranda', [ApiBerandaController::class, 'index']);
 Route::get('/beranda/profil', [ApiBerandaController::class, 'getProfil']);
 Route::get('/beranda/alumni', [ApiBerandaController::class, 'getAlumni']);
 Route::get('/komentar', [ApiBerandaController::class, 'getKomentar']);
-Route::post('/komentar', [ApiBerandaController::class, 'storeKomentar']);
+Route::post('/komentar', [ApiBerandaController::class, 'storeKomentar'])->middleware('auth:sanctum');
 
 Route::get('/aktivitas', [ApiAktivitasController::class, 'index']);
 Route::get('/aktivitas/{id}', [ApiAktivitasController::class, 'show']);
@@ -49,11 +51,24 @@ Route::get('/test', function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [ApiAuthController::class, 'logout']);
     Route::get('/me', [ApiAuthController::class, 'me']);
+    Route::get('/pengaturan-kompresi', [CompressionSettingsController::class, 'show']);
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
 
     Route::middleware('role:admin')->group(function () {
+        Route::get('/admin/pengaturan-kompresi', [CompressionSettingsController::class, 'show']);
+        Route::put('/admin/pengaturan-kompresi', [CompressionSettingsController::class, 'update']);
+        Route::get('/admin/landing-page', [AdminLandingPageController::class, 'index']);
+        Route::put('/admin/landing-page/profil', [AdminLandingPageController::class, 'updateProfile']);
+        Route::post('/admin/landing-page/alumni', [AdminLandingPageController::class, 'storeAlumni']);
+        Route::put('/admin/landing-page/alumni/{alumni}', [AdminLandingPageController::class, 'updateAlumni']);
+        Route::delete('/admin/landing-page/alumni/{alumni}', [AdminLandingPageController::class, 'destroyAlumni']);
+        Route::post('/admin/landing-page/aktivitas', [AdminLandingPageController::class, 'storeActivity']);
+        Route::put('/admin/landing-page/aktivitas/{activity}', [AdminLandingPageController::class, 'updateActivity']);
+        Route::delete('/admin/landing-page/aktivitas/{activity}', [AdminLandingPageController::class, 'destroyActivity']);
+        Route::delete('/admin/landing-page/komentar/{comment}', [AdminLandingPageController::class, 'destroyComment']);
+        Route::patch('/admin/landing-page/komentar/{comment}/status', [AdminLandingPageController::class, 'updateCommentStatus']);
         Route::get('/admin/pembimbing', [ApiAuthController::class, 'getPembimbing']);
         Route::post('/admin/pembimbing', [ApiAuthController::class, 'createPembimbing']);
         Route::get('/users/peserta', [ParticipantAccountController::class, 'index']);
@@ -84,6 +99,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::middleware('role:admin')->group(function () {
         Route::post('/pendaftaran/{id}/status', [PendaftaranController::class, 'update']);
+        Route::delete('/pendaftaran/{id}', [PendaftaranController::class, 'destroy']);
     });
     Route::middleware('role:peserta')->group(function () {
         Route::get('/pendaftaran/me', [PendaftaranController::class, 'myRegistration']);

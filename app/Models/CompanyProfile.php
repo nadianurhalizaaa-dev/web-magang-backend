@@ -22,5 +22,10 @@ class CompanyProfile extends Model
         'email',
         'telepon',
         'website',
+        'instagram',
+    ];
+
+    protected $hidden = [
+        'website',
     ];
 }
