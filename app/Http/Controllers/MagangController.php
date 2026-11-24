@@ -41,6 +41,7 @@ class MagangController extends Controller
             'participant_code' => ['required', 'string', 'max:30', 'unique:magangs,participant_code'],
             'participant_name' => ['required', 'string', 'max:100'],
             'institution' => ['nullable', 'string', 'max:120'],
+            'periode_id' => ['nullable', 'integer', 'exists:periode_magangs,id'],
         ]);
 
         $magang = Magang::create($validated);

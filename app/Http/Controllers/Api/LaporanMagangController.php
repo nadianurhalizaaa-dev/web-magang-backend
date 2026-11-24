@@ -166,32 +166,44 @@ class LaporanMagangController extends Controller
             ? $laporan->file_laporan_pdf
             : ($laporan->file_pdf_final ?: $laporan->file_laporan_pdf);
 
-        if ($filePath === $laporan->file_laporan_pdf && $laporan->link_google_doc && ! $request->boolean('source')) {
-            return redirect()->away($laporan->link_google_doc);
+        $disk = Storage::disk('public');
+        if (is_string($filePath) && $disk->exists($filePath)) {
+            $fileStream = $disk->readStream($filePath);
+            if ($fileStream !== false) {
+                return response()->streamDownload(function () use ($fileStream) {
+                    fpassthru($fileStream);
+                    fclose($fileStream);
+                }, basename($filePath), [
+                    'Content-Type' => 'application/pdf',
+                ]);
+            }
         }
 
-        $disk = Storage::disk('public');
-        if (! is_string($filePath) || ! $disk->exists($filePath)) {
+        $googleDocLink = $laporan->riwayatRevisi->first()?->link_google_doc
+            ?: $laporan->link_google_doc;
+        $fileId = $this->googleDriveFileId($googleDocLink);
+        if (! $request->boolean('source') && $fileId) {
+            $pdf = $this->fetchGooglePdf($fileId, str_contains((string) $googleDocLink, 'docs.google.com'));
+            if ($pdf) {
+                return response($pdf, 200, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'inline; filename="laporan-'.$laporan->id_laporan.'.pdf"',
+                    'X-Content-Type-Options' => 'nosniff',
+                ]);
+            }
+        }
+
+        if (! is_string($filePath) || $filePath === '') {
             return response()->json([
                 'success' => false,
                 'message' => 'File laporan tidak ditemukan',
             ], 404);
         }
 
-        $fileStream = $disk->readStream($filePath);
-        if ($fileStream === false) {
-            return response()->json([
-                'success' => false,
-                'message' => 'File laporan tidak ditemukan'
-            ], 404);
-        }
-
-        return response()->streamDownload(function () use ($fileStream) {
-            fpassthru($fileStream);
-            fclose($fileStream);
-        }, basename($filePath), [
-            'Content-Type' => 'application/pdf',
-        ]);
+        return response()->json([
+            'success' => false,
+            'message' => 'File laporan tidak ditemukan',
+        ], 404);
     }
 
     public function downloadGoogleDocPdf(Request $request, $id)
@@ -375,10 +387,10 @@ class LaporanMagangController extends Controller
             ], 403);
         }
 
-        if ($laporan->status_laporan !== 'Selesai') {
+        if (! in_array($laporan->status_laporan, ['Disetujui', 'Selesai'], true)) {
             return response()->json([
                 'success' => false,
-                'message' => 'PDF final hanya dapat dibuat setelah laporan berstatus Selesai.',
+                'message' => 'PDF final hanya dapat dibuat setelah laporan disetujui.',
             ], 422);
         }
 

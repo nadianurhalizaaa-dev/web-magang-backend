@@ -13,7 +13,13 @@ class Magang extends Model
         'participant_name',
         'institution',
         'status',
+        'periode_id',
     ];
+
+    public function periode()
+    {
+        return $this->belongsTo(PeriodeMagang::class, 'periode_id');
+    }
 
     public function pembimbing()
     {

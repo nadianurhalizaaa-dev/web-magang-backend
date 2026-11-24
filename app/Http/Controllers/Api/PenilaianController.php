@@ -249,8 +249,7 @@ class PenilaianController extends Controller
             default => 'D (Kurang)',
         };
 
-        $oldFinalPdfPath = null;
-        $penilaian = DB::transaction(function () use ($request, $report, $rubric, $total, $predicate, &$oldFinalPdfPath) {
+        $penilaian = DB::transaction(function () use ($request, $report, $rubric, $total, $predicate) {
             $query = Penilaian::where('id_peserta', $request->id_peserta);
             if ($report) {
                 $query->where('id_laporan_magang', $report->id_laporan);
@@ -277,8 +276,6 @@ class PenilaianController extends Controller
             $penilaian->save();
 
             if ($report) {
-                $oldFinalPdfPath = $report->file_pdf_final;
-                $report->file_pdf_final = null;
                 $report->nilai_laporan = $total;
                 $report->tanggal_dinilai = now();
                 $report->status_laporan = 'Selesai';
@@ -287,10 +284,6 @@ class PenilaianController extends Controller
 
             return $penilaian->load('laporan');
         });
-
-        if ($oldFinalPdfPath) {
-            Storage::disk('public')->delete($oldFinalPdfPath);
-        }
 
         return response()->json([
             'success' => true,
@@ -309,6 +302,43 @@ class PenilaianController extends Controller
         return response()->json([
             'success' => true,
             'data' => $penilaian
+        ]);
+    }
+
+    public function destroy(Request $request, int $userId)
+    {
+        $registration = $this->assignedActiveRegistration($request, $userId);
+        if (! $registration) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pemagang aktif tidak ditemukan atau tidak ditugaskan kepada Anda.',
+            ], 404);
+        }
+
+        DB::transaction(function () use ($registration, $userId) {
+            Penilaian::where('id_peserta', $userId)->delete();
+
+            LaporanMagang::where('id_peserta', $userId)
+                ->get()
+                ->each(function (LaporanMagang $report) {
+                    $report->nilai_laporan = null;
+                    $report->tanggal_dinilai = null;
+                    if ($report->status_laporan === 'Selesai') {
+                        $report->status_laporan = 'Disetujui';
+                    }
+                    $report->save();
+                });
+
+            if ($registration->penilaian_akhir_pdf) {
+                Storage::disk('public')->delete($registration->penilaian_akhir_pdf);
+                $registration->penilaian_akhir_pdf = null;
+                $registration->save();
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data penilaian peserta berhasil dihapus.',
         ]);
     }
 }

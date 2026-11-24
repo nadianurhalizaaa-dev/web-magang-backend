@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ParticipantAccountController;
 use App\Http\Controllers\Api\PendaftaranController;
 use App\Http\Controllers\Api\PenilaianController;
 use App\Http\Controllers\Api\PeriodeController;
+use App\Http\Controllers\Api\PdfFinalSettingsController;
 use App\Http\Controllers\Api\RekapitulasiController;
 use App\Http\Controllers\Api\TugasController;
 use App\Http\Controllers\MagangController;
@@ -124,6 +125,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(['role:admin,pembimbing,peserta', 'active.internship'])->group(function () {
         Route::get('/magang', [MagangController::class, 'index']);
     });
+    Route::middleware('role:admin,pembimbing')->post('/magang', [MagangController::class, 'store']);
     Route::middleware(['role:admin,pembimbing,peserta', 'active.internship', 'reply.letter.received'])->group(function () {
         Route::get('/absensi/hari-ini', [AbsensiController::class, 'today']);
     });
@@ -134,7 +136,6 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware('role:admin')->group(function () {
-        Route::post('/magang', [MagangController::class, 'store']);
         Route::apiResource('/pembimbing', PembimbingController::class);
         Route::post('/absensi', [AbsensiController::class, 'store']);
         Route::delete('/absensi/{id}', [AbsensiController::class, 'destroy']);
@@ -142,6 +143,12 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
+    Route::middleware('role:admin,pembimbing')->group(function () {
+        Route::get('/laporan-magang/pdf-assets', [PdfFinalSettingsController::class, 'show']);
+        Route::get('/laporan-magang/pdf-assets/signature', [PdfFinalSettingsController::class, 'signature']);
+        Route::post('/laporan-magang/pdf-assets', [PdfFinalSettingsController::class, 'store']);
+    });
+
     Route::middleware('role:admin,pembimbing,peserta')->group(function () {
         Route::get('/laporan-magang', [LaporanMagangController::class, 'index']);
         Route::get('/laporan-magang/{id}', [LaporanMagangController::class, 'show']);
@@ -166,6 +173,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/penilaian', [PenilaianController::class, 'index']);
         Route::get('/penilaian/peserta', [PenilaianController::class, 'participants']);
         Route::post('/penilaian', [PenilaianController::class, 'store']);
+        Route::delete('/penilaian/peserta/{userId}', [PenilaianController::class, 'destroy']);
         Route::post('/penilaian/peserta/{userId}/pdf', [PenilaianController::class, 'uploadFinalAssessmentPdf']);
         Route::get('/penilaian/peserta/{userId}/pdf', [PenilaianController::class, 'downloadFinalAssessmentPdf']);
         Route::get('/rekapitulasi', [RekapitulasiController::class, 'index']);
