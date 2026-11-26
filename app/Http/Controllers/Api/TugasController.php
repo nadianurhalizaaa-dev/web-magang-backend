@@ -10,19 +10,24 @@ use Illuminate\Support\Facades\Storage;
 
 class TugasController extends Controller
 {
+    private function isParticipantRole(?string $role): bool
+    {
+        return in_array(strtolower(trim((string) $role)), ['peserta', 'pemagang', 'calon pemagang'], true);
+    }
+
     // Semua role: daftar tugas
     public function index(Request $request)
     {
         $user = $request->user();
         $query = Tugas::latest();
 
-        if ($user->role === 'peserta') {
+        if ($this->isParticipantRole($user?->role)) {
             $query->with(['submisi' => function ($q) use ($user) {
-                $q->where('user_id', $user->id);
+                $q->where('user_id', $user->id)->with('penilai:id,name');
             }]);
         } else {
             // Admin & Pembimbing: load semua submisi beserta data peserta
-            $query->with('submisi.peserta:id,name');
+            $query->with(['submisi.peserta:id,name', 'submisi.penilai:id,name']);
         }
 
         return response()->json($query->get());
@@ -34,12 +39,12 @@ class TugasController extends Controller
         $user = $request->user();
         $query = Tugas::query();
 
-        if ($user->role === 'peserta') {
+        if ($this->isParticipantRole($user?->role)) {
             $query->with(['submisi' => function ($q) use ($user) {
-                $q->where('user_id', $user->id);
+                $q->where('user_id', $user->id)->with('penilai:id,name');
             }]);
         } else {
-            $query->with('submisi.peserta:id,name');
+            $query->with(['submisi.peserta:id,name', 'submisi.penilai:id,name']);
         }
 
         $tugas = $query->find($id);

@@ -7,9 +7,11 @@ use App\Http\Controllers\Api\AuthController as ApiAuthController;
 use App\Http\Controllers\Api\BerandaController as ApiBerandaController;
 use App\Http\Controllers\Api\LandingPageManagementController;
 use App\Http\Controllers\Api\LaporanMagangController;
+use App\Http\Controllers\Api\LogbookController;
 use App\Http\Controllers\Api\LokasiAbsensiController;
 use App\Http\Controllers\Api\ParticipantAccountController;
 use App\Http\Controllers\Api\PendaftaranController;
+use App\Http\Controllers\Api\PengaturanKompresiController;
 use App\Http\Controllers\Api\PenilaianController;
 use App\Http\Controllers\Api\PeriodeController;
 use App\Http\Controllers\Api\RekapitulasiController;
@@ -76,8 +78,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/admin/lokasi/{id}', [LokasiAbsensiController::class, 'update']);
         Route::delete('/admin/lokasi/{id}', [LokasiAbsensiController::class, 'destroy']);
         Route::patch('/admin/lokasi/{id}/toggle', [LokasiAbsensiController::class, 'toggleActive']);
+        Route::get('/admin/pengaturan-kompresi', [PengaturanKompresiController::class, 'show']);
+        Route::put('/admin/pengaturan-kompresi', [PengaturanKompresiController::class, 'update']);
     });
 
+    Route::get('/pengaturan-kompresi', [PengaturanKompresiController::class, 'show']);
     Route::get('/lokasi-absensi', [LokasiAbsensiController::class, 'index']);
 
     Route::get('/periode', [PeriodeController::class, 'index']);
@@ -181,5 +186,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/tugas/{id}/submit', [TugasController::class, 'submit']);
         Route::post('/tugas/{id}/submisi', [TugasController::class, 'submit']);
         Route::get('/submisi-saya', [TugasController::class, 'submisiSaya']);
+    });
+
+    // Logbook Harian Kegiatan Magang
+    Route::middleware('role:admin,pembimbing,peserta')->group(function () {
+        Route::get('/logbook', [LogbookController::class, 'index']);
+    });
+    Route::middleware(['role:peserta', 'active.internship'])->group(function () {
+        Route::post('/logbook', [LogbookController::class, 'store']);
+        Route::post('/logbook/{id}', [LogbookController::class, 'update']);
+        Route::put('/logbook/{id}', [LogbookController::class, 'update']);
+    });
+    Route::middleware('role:admin,peserta')->group(function () {
+        Route::delete('/logbook/{id}', [LogbookController::class, 'destroy']);
+    });
+    Route::middleware('role:admin,pembimbing')->group(function () {
+        Route::post('/logbook/{id}/verifikasi', [LogbookController::class, 'verify']);
+        Route::patch('/logbook/{id}/verifikasi', [LogbookController::class, 'verify']);
     });
 });

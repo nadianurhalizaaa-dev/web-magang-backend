@@ -135,14 +135,20 @@ class PendaftaranController extends Controller
     // Pemagang submit registration
     public function store(Request $request)
     {
+        $settings = \Illuminate\Support\Facades\Schema::hasTable('compression_settings')
+            ? \Illuminate\Support\Facades\DB::table('compression_settings')->orderBy('id')->first()
+            : null;
+        $maxLetterKb = ((int) ($settings->max_file_size_mb ?? 4)) * 1024;
+        $maxPhotoKb = max(2048, (int) ($settings->photo_target_size_kb ?? 100));
+
         $request->validate([
             'periode_id' => 'required|exists:periode_magangs,id',
             'asal_instansi' => 'required|string|max:150',
             'no_hp' => 'required|string|max:20',
             'program_studi' => 'required|string|max:150',
             'alamat' => 'required|string|max:1000',
-            'pas_foto' => 'required|image|mimes:jpg,jpeg,png|max:2048',
-            'file_surat_pengantar' => 'required|file|mimes:pdf|max:2048',
+            'pas_foto' => "required|image|mimes:jpg,jpeg,png|max:{$maxPhotoKb}",
+            'file_surat_pengantar' => "required|file|mimes:pdf|max:{$maxLetterKb}",
         ]);
 
         $user = Auth::user();
