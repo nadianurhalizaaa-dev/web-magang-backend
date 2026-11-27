@@ -13,6 +13,8 @@ class Magang extends Model
         'participant_name',
         'institution',
         'status',
+        'periode_id',
+        'pembimbing_id',
     ];
 
     public function pembimbing()

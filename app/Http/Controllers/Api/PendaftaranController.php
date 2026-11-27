@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\Magang;
 use App\Models\Pendaftaran;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -16,6 +20,108 @@ class PendaftaranController extends Controller
     {
         $pendaftarans = Pendaftaran::with(['user', 'periode', 'pembimbing'])->get();
         return response()->json(['data' => $pendaftarans]);
+    }
+
+    public function updateParticipantIdentity(Request $request, $id)
+    {
+        $pendaftaran = $this->findManageableRegistration($request, $id);
+
+        if (! $pendaftaran->user) {
+            return response()->json(['message' => 'Akun peserta pada pendaftaran ini tidak ditemukan.'], 422);
+        }
+
+        $oldNim = trim((string) $pendaftaran->user->nim);
+        $request->merge([
+            'name' => trim((string) $request->input('name', '')),
+            'nim' => trim((string) $request->input('nim', '')),
+        ]);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'nim' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('users', 'nim')->ignore($pendaftaran->user->id),
+                Rule::unique('magangs', 'participant_code')->ignore($oldNim, 'participant_code'),
+            ],
+        ]);
+
+        DB::transaction(function () use ($pendaftaran, $validated, $oldNim) {
+            if ($oldNim !== '') {
+                $legacyMagangs = Magang::where('participant_code', $oldNim)
+                    ->when($pendaftaran->periode_id, fn ($query) => $query->where('periode_id', $pendaftaran->periode_id))
+                    ->get();
+
+                foreach ($legacyMagangs as $legacyMagang) {
+                    $legacyMagang->absensis()->update([
+                        'participant_code' => $validated['nim'],
+                        'participant_name' => $validated['name'],
+                    ]);
+                    $legacyMagang->update([
+                        'participant_code' => $validated['nim'],
+                        'participant_name' => $validated['name'],
+                    ]);
+                }
+            }
+
+            $pendaftaran->user->update([
+                'name' => $validated['name'],
+                'nim' => $validated['nim'],
+            ]);
+        });
+
+        return response()->json([
+            'data' => $pendaftaran->load(['user', 'periode', 'pembimbing']),
+            'message' => 'Identitas peserta berhasil diperbarui.',
+        ]);
+    }
+
+    public function removeParticipantFromPeriod(Request $request, $id)
+    {
+        $pendaftaran = $this->findManageableRegistration($request, $id);
+
+        if (! $pendaftaran->periode_id) {
+            return response()->json(['message' => 'Peserta ini tidak terdaftar pada periode.'], 422);
+        }
+
+        $pendaftaran->update(['periode_id' => null]);
+
+        return response()->json([
+            'message' => 'Peserta berhasil dikeluarkan dari periode. Akun dan riwayat absensi tetap tersimpan.',
+        ]);
+    }
+
+    private function findManageableRegistration(Request $request, $id): Pendaftaran
+    {
+        $pendaftaran = Pendaftaran::with('user')->find($id);
+        if (! $pendaftaran) {
+            abort(404, 'Pendaftaran tidak ditemukan.');
+        }
+
+        $pembimbingId = (int) $request->user()->id;
+        if ((int) $pendaftaran->pembimbing_id === $pembimbingId) {
+            return $pendaftaran;
+        }
+
+        if ($pendaftaran->periode_id
+            && ! in_array($pendaftaran->status, ['Dibatalkan', 'Ditolak'], true)
+            && ! $pendaftaran->pembimbing_id) {
+            $periodPembimbingIds = Pendaftaran::query()
+                ->where('periode_id', $pendaftaran->periode_id)
+                ->whereNotIn('status', ['Dibatalkan', 'Ditolak'])
+                ->whereNotNull('pembimbing_id')
+                ->distinct()
+                ->pluck('pembimbing_id')
+                ->map(fn ($assignedId) => (int) $assignedId);
+
+            if ($periodPembimbingIds->count() === 1
+                && $periodPembimbingIds->contains($pembimbingId)) {
+                return $pendaftaran;
+            }
+        }
+
+        abort(403, 'Anda hanya dapat mengelola peserta bimbingan Anda.');
     }
 
     // User views own registration

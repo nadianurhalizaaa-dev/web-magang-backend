@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\LandingPageManagementController;
 use App\Http\Controllers\Api\LaporanMagangController;
 use App\Http\Controllers\Api\LogbookController;
 use App\Http\Controllers\Api\LokasiAbsensiController;
+use App\Http\Controllers\Api\MasterPenilaianController;
 use App\Http\Controllers\Api\ParticipantAccountController;
 use App\Http\Controllers\Api\PendaftaranController;
 use App\Http\Controllers\Api\PengaturanKompresiController;
@@ -96,6 +97,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/pendaftaran', [PendaftaranController::class, 'index']);
         Route::get('/pendaftaran/{id}/surat-pengantar/download', [PendaftaranController::class, 'downloadSuratPengantarById']);
     });
+    Route::middleware('role:pembimbing')->put('/pendaftaran/{id}/identitas', [PendaftaranController::class, 'updateParticipantIdentity']);
+    Route::middleware('role:pembimbing')->delete('/pendaftaran/{id}/periode', [PendaftaranController::class, 'removeParticipantFromPeriod']);
+    Route::middleware('role:pembimbing')->put('/magang/{id}/identitas', [MagangController::class, 'updateParticipantIdentity']);
+    Route::middleware('role:pembimbing')->delete('/magang/{id}/periode', [MagangController::class, 'removeParticipantFromPeriod']);
     Route::middleware('role:admin')->group(function () {
         Route::post('/pendaftaran/{id}/status', [PendaftaranController::class, 'update']);
     });
@@ -145,6 +150,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('/laporan-magang', [LaporanMagangController::class, 'index']);
         Route::get('/laporan-magang/{id}', [LaporanMagangController::class, 'show']);
         Route::get('/laporan-magang/{id}/download', [LaporanMagangController::class, 'download']);
+        Route::get('/laporan-magang/{id}/google-doc-pdf', [LaporanMagangController::class, 'downloadGoogleDocPdf']);
+        Route::post('/laporan-magang/{id}/final-pdf', [LaporanMagangController::class, 'saveFinalPdf'])->middleware('role:admin,pembimbing');
+        Route::get('/master-penilaian/aktif', [MasterPenilaianController::class, 'active']);
     });
 
     Route::middleware('role:peserta')->group(function () {
@@ -155,6 +163,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin,pembimbing')->group(function () {
         Route::post('/laporan-magang/{id}/review', [LaporanMagangController::class, 'review']);
         Route::delete('/laporan-magang/{id}', [LaporanMagangController::class, 'destroy']);
+        Route::get('/master-penilaian', [MasterPenilaianController::class, 'index']);
+        Route::post('/master-penilaian', [MasterPenilaianController::class, 'store']);
+        Route::put('/master-penilaian/{id}', [MasterPenilaianController::class, 'update']);
+        Route::delete('/master-penilaian/{id}', [MasterPenilaianController::class, 'destroy']);
         Route::get('/penilaian', [PenilaianController::class, 'index']);
         Route::get('/penilaian/peserta', [PenilaianController::class, 'participants']);
         Route::post('/penilaian', [PenilaianController::class, 'store']);
