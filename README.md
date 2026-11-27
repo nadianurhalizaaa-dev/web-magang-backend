@@ -21,38 +21,16 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-## Email notifikasi pendaftaran
+## Penandaan Alpa otomatis
 
-Alamat pengirim, nama pengirim, dan penerima notifikasi diatur melalui `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, dan `MAIL_ADMIN_ADDRESS` pada `.env`. Untuk Gmail SMTP, gunakan `smtp.gmail.com` port `587` dengan TLS dan Google App Password; jangan gunakan atau membagikan kata sandi akun biasa.
-
-Jika SMTP tidak dapat diakses, aplikasi dapat mencoba Gmail API sebagai cadangan:
-
-1. Aktifkan Gmail API dan buat OAuth client di Google Cloud Console.
-2. Simpan file OAuth client sebagai `storage/app/google/credentials.json`.
-3. Jalankan `php artisan gmail:setup`, lalu masuk menggunakan akun yang sama dengan `MAIL_FROM_ADDRESS` dan berikan izin mengirim email.
-
-## Notifikasi WhatsApp
-
-Notifikasi WhatsApp menggunakan tautan `wa.me` tanpa API atau biaya gateway. Setelah mengajukan pendaftaran, peserta dapat membuka tautan untuk mengirim pemberitahuan kepada admin. Setelah admin menerima peserta, admin dapat membuka tautan untuk mengirim pesan kepada peserta. Tautan hanya membuka WhatsApp dengan pesan terisi; pesan baru terkirim setelah pengguna menekan **Kirim**. Nomor admin diatur melalui `WHATSAPP_ADMIN_NUMBER` pada `.env` dan default-nya `6283196853453`.
-
-## Data aktivitas landing page
-
-Konten profil, alumni, aktivitas, dan ulasan landing page disimpan pada tabel database yang sudah ada dan dikelola melalui endpoint admin. Untuk menambahkan tiga aktivitas contoh pada environment lokal saja, jalankan `php artisan db:seed --class=LandingPageActivitySeeder`. Seeder ini idempotent dan menolak berjalan di luar environment `local` atau `testing`.
-
-Profil landing page menyimpan akun pada kolom Instagram tersendiri. Admin dapat mengisi nama akun (misalnya `@pamtechno`) atau tautan profil; alamat website lama tetap tersimpan di database tetapi tidak ditampilkan.
-
-Token akan disimpan lokal di `storage/app/google/token.json`. Jangan commit atau membagikan file kredensial maupun token; direktori tersebut diabaikan Git.
-
-## Penandaan Tidak Hadir otomatis
-
-Peserta magang aktif yang belum memiliki catatan absensi masuk akan otomatis dicatat sebagai **Tidak Hadir** setelah 15 menit dari jam masuk yang ditetapkan pembimbing (default pukul 08.15 WIB). Jalankan scheduler Laravel agar tugas ini berjalan:
+Peserta magang aktif yang belum memiliki catatan absensi masuk akan otomatis dicatat sebagai **Alpa** setiap hari pukul 08.00 WIB. Jalankan scheduler Laravel agar tugas ini berjalan:
 
 - Windows/Laragon: dari folder `web-magang`, jalankan `php artisan schedule:work` dan biarkan proses tetap berjalan.
 - Server dengan cron: tambahkan `* * * * * cd /path/to/web-magang && php artisan schedule:run >> /dev/null 2>&1` ke crontab.
 
 Tugas ini tidak mengubah catatan absensi yang sudah ada, seperti Hadir atau Izin.
 
-Pembimbing dapat mengatur waktu mulai absensi masuk dan pulang untuk peserta bimbingannya melalui menu **Jadwal Absensi**. Peserta memiliki waktu 15 menit sejak jam masuk yang ditentukan untuk melakukan absensi. Jika belum diatur, jam masuk menggunakan default pukul 08.00 WIB dan jam pulang pukul 17.00 WIB.
+Pembimbing dapat mengatur waktu mulai absensi pulang untuk peserta bimbingannya melalui menu **Jadwal Absensi**. Jika belum diatur, waktu pulang menggunakan default pukul 17.00 WIB.
 
 ## Learning Laravel
 

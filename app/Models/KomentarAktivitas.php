@@ -14,6 +14,8 @@ class KomentarAktivitas extends Model
     protected $fillable = [
         'aktivitas_magang_id',
         'user_id',
+        'nama_pengguna',
+        'email',
         'komentar',
     ];
 

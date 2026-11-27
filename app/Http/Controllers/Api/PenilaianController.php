@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\LaporanMagang;
-use App\Models\MasterPenilaian;
 use App\Models\Pendaftaran;
 use App\Models\Penilaian;
 use Illuminate\Http\Request;
@@ -14,6 +13,14 @@ use Illuminate\Support\Facades\Validator;
 
 class PenilaianController extends Controller
 {
+    private const RUBRIC = [
+        'ketertiban_awal' => ['aspek' => 'Ketertiban Proses Magang', 'bobot' => 10],
+        'kelengkapan_laporan' => ['aspek' => 'Kelengkapan Sistematika Laporan', 'bobot' => 50],
+        'kerapian_dokumentasi' => ['aspek' => 'Kerapian Catatan Dokumentasi Kegiatan Magang', 'bobot' => 20],
+        'analisis_penugasan' => ['aspek' => 'Analisis Hasil Penugasan', 'bobot' => 10],
+        'ketertiban_akhir' => ['aspek' => 'Ketertiban Proses Magang', 'bobot' => 10],
+    ];
+
     public function participants(Request $request)
     {
         $registrations = Pendaftaran::with(['user:id,name,email'])
@@ -161,29 +168,16 @@ class PenilaianController extends Controller
      */
     public function store(Request $request)
     {
-        $criteria = MasterPenilaian::query()
-            ->where('aktif', true)
-            ->orderBy('urutan')
-            ->orderBy('id')
-            ->get();
-
-        if ($criteria->isEmpty() || round((float) $criteria->sum('bobot'), 2) !== 100.0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Aktifkan pertanyaan penilaian dengan total bobot tepat 100% sebelum mengisi penilaian.',
-            ], 422);
-        }
-
-        $rules = [
+        $validator = Validator::make($request->all(), [
             'id_peserta' => 'required|integer|exists:users,id',
             'id_laporan_magang' => 'nullable|integer|exists:laporan_magang,id_laporan',
-            'rincian_nilai' => ['required', 'array', 'size:'.$criteria->count()],
-        ];
-        foreach ($criteria as $criterion) {
-            $rules['rincian_nilai.'.$criterion->id] = ['required', 'numeric', 'between:0,100'];
-        }
-
-        $validator = Validator::make($request->all(), $rules);
+            'rincian_nilai' => 'required|array|size:5',
+            'rincian_nilai.ketertiban_awal' => 'required|numeric|between:0,100',
+            'rincian_nilai.kelengkapan_laporan' => 'required|numeric|between:0,100',
+            'rincian_nilai.kerapian_dokumentasi' => 'required|numeric|between:0,100',
+            'rincian_nilai.analisis_penugasan' => 'required|numeric|between:0,100',
+            'rincian_nilai.ketertiban_akhir' => 'required|numeric|between:0,100',
+        ]);
 
         if ($validator->fails()) {
             return response()->json([
@@ -217,7 +211,7 @@ class PenilaianController extends Controller
             }
         }
 
-        if ($report && ! in_array($report->status_laporan, ['Disetujui', 'Selesai'], true)) {
+        if ($report && $report->status_laporan !== 'Disetujui') {
             return response()->json([
                 'success' => false,
                 'message' => 'Laporan harus disetujui sebelum dapat dinilai.',
@@ -226,16 +220,13 @@ class PenilaianController extends Controller
 
         $rubric = [];
         $total = 0;
-        foreach ($criteria as $criterion) {
-            $score = (float) $request->input('rincian_nilai.'.$criterion->id);
-            $weightedScore = round($score * $criterion->bobot / 100, 2);
-            $rubric[(string) $criterion->id] = [
-                'master_id' => $criterion->id,
-                'kode' => $criterion->kode,
-                'pertanyaan' => $criterion->pertanyaan,
-                'aspek' => $criterion->pertanyaan,
+        foreach (self::RUBRIC as $key => $criteria) {
+            $score = (float) $request->input("rincian_nilai.{$key}");
+            $weightedScore = round($score * $criteria['bobot'] / 100, 2);
+            $rubric[$key] = [
+                'aspek' => $criteria['aspek'],
                 'nilai' => $score,
-                'bobot' => $criterion->bobot,
+                'bobot' => $criteria['bobot'],
                 'nilai_akhir' => $weightedScore,
             ];
             $total += $weightedScore;
@@ -278,7 +269,6 @@ class PenilaianController extends Controller
             if ($report) {
                 $report->nilai_laporan = $total;
                 $report->tanggal_dinilai = now();
-                $report->status_laporan = 'Selesai';
                 $report->save();
             }
 
@@ -302,43 +292,6 @@ class PenilaianController extends Controller
         return response()->json([
             'success' => true,
             'data' => $penilaian
-        ]);
-    }
-
-    public function destroy(Request $request, int $userId)
-    {
-        $registration = $this->assignedActiveRegistration($request, $userId);
-        if (! $registration) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Pemagang aktif tidak ditemukan atau tidak ditugaskan kepada Anda.',
-            ], 404);
-        }
-
-        DB::transaction(function () use ($registration, $userId) {
-            Penilaian::where('id_peserta', $userId)->delete();
-
-            LaporanMagang::where('id_peserta', $userId)
-                ->get()
-                ->each(function (LaporanMagang $report) {
-                    $report->nilai_laporan = null;
-                    $report->tanggal_dinilai = null;
-                    if ($report->status_laporan === 'Selesai') {
-                        $report->status_laporan = 'Disetujui';
-                    }
-                    $report->save();
-                });
-
-            if ($registration->penilaian_akhir_pdf) {
-                Storage::disk('public')->delete($registration->penilaian_akhir_pdf);
-                $registration->penilaian_akhir_pdf = null;
-                $registration->save();
-            }
-        });
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Data penilaian peserta berhasil dihapus.',
         ]);
     }
 }

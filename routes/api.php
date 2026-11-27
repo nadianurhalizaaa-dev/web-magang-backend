@@ -2,19 +2,18 @@
 
 use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\Api\AktivitasController as ApiAktivitasController;
-use App\Http\Controllers\Api\AdminLandingPageController;
 use App\Http\Controllers\Api\AttendanceScheduleController;
 use App\Http\Controllers\Api\AuthController as ApiAuthController;
 use App\Http\Controllers\Api\BerandaController as ApiBerandaController;
-use App\Http\Controllers\Api\CompressionSettingsController;
+use App\Http\Controllers\Api\LandingPageManagementController;
 use App\Http\Controllers\Api\LaporanMagangController;
+use App\Http\Controllers\Api\LogbookController;
 use App\Http\Controllers\Api\LokasiAbsensiController;
-use App\Http\Controllers\Api\MasterPenilaianController;
 use App\Http\Controllers\Api\ParticipantAccountController;
 use App\Http\Controllers\Api\PendaftaranController;
+use App\Http\Controllers\Api\PengaturanKompresiController;
 use App\Http\Controllers\Api\PenilaianController;
 use App\Http\Controllers\Api\PeriodeController;
-use App\Http\Controllers\Api\PdfFinalSettingsController;
 use App\Http\Controllers\Api\RekapitulasiController;
 use App\Http\Controllers\Api\TugasController;
 use App\Http\Controllers\MagangController;
@@ -42,7 +41,7 @@ Route::post('/komentar', [ApiBerandaController::class, 'storeKomentar'])->middle
 
 Route::get('/aktivitas', [ApiAktivitasController::class, 'index']);
 Route::get('/aktivitas/{id}', [ApiAktivitasController::class, 'show']);
-Route::post('/aktivitas/{id}/komentar', [ApiAktivitasController::class, 'storeKomentar'])->middleware('auth:sanctum');
+Route::post('/aktivitas/{id}/komentar', [ApiAktivitasController::class, 'storeKomentar']);
 Route::post('/aktivitas', [ApiAktivitasController::class, 'store'])->middleware('auth:sanctum');
 
 Route::get('/test', function () {
@@ -52,24 +51,22 @@ Route::get('/test', function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [ApiAuthController::class, 'logout']);
     Route::get('/me', [ApiAuthController::class, 'me']);
-    Route::get('/pengaturan-kompresi', [CompressionSettingsController::class, 'show']);
+    Route::post('/me/update', [ApiAuthController::class, 'updateProfile']);
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
 
     Route::middleware('role:admin')->group(function () {
-        Route::get('/admin/pengaturan-kompresi', [CompressionSettingsController::class, 'show']);
-        Route::put('/admin/pengaturan-kompresi', [CompressionSettingsController::class, 'update']);
-        Route::get('/admin/landing-page', [AdminLandingPageController::class, 'index']);
-        Route::put('/admin/landing-page/profil', [AdminLandingPageController::class, 'updateProfile']);
-        Route::post('/admin/landing-page/alumni', [AdminLandingPageController::class, 'storeAlumni']);
-        Route::put('/admin/landing-page/alumni/{alumni}', [AdminLandingPageController::class, 'updateAlumni']);
-        Route::delete('/admin/landing-page/alumni/{alumni}', [AdminLandingPageController::class, 'destroyAlumni']);
-        Route::post('/admin/landing-page/aktivitas', [AdminLandingPageController::class, 'storeActivity']);
-        Route::put('/admin/landing-page/aktivitas/{activity}', [AdminLandingPageController::class, 'updateActivity']);
-        Route::delete('/admin/landing-page/aktivitas/{activity}', [AdminLandingPageController::class, 'destroyActivity']);
-        Route::delete('/admin/landing-page/komentar/{comment}', [AdminLandingPageController::class, 'destroyComment']);
-        Route::patch('/admin/landing-page/komentar/{comment}/status', [AdminLandingPageController::class, 'updateCommentStatus']);
+        Route::get('/admin/landing-page', [LandingPageManagementController::class, 'index']);
+        Route::put('/admin/landing-page/profil', [LandingPageManagementController::class, 'updateProfil']);
+        Route::post('/admin/landing-page/alumni', [LandingPageManagementController::class, 'storeAlumni']);
+        Route::put('/admin/landing-page/alumni/{id}', [LandingPageManagementController::class, 'updateAlumni']);
+        Route::delete('/admin/landing-page/alumni/{id}', [LandingPageManagementController::class, 'destroyAlumni']);
+        Route::post('/admin/landing-page/aktivitas', [LandingPageManagementController::class, 'storeAktivitas']);
+        Route::put('/admin/landing-page/aktivitas/{id}', [LandingPageManagementController::class, 'updateAktivitas']);
+        Route::delete('/admin/landing-page/aktivitas/{id}', [LandingPageManagementController::class, 'destroyAktivitas']);
+        Route::patch('/admin/landing-page/komentar/{id}/status', [LandingPageManagementController::class, 'updateKomentarStatus']);
+        Route::delete('/admin/landing-page/komentar/{id}', [LandingPageManagementController::class, 'destroyKomentar']);
         Route::get('/admin/pembimbing', [ApiAuthController::class, 'getPembimbing']);
         Route::post('/admin/pembimbing', [ApiAuthController::class, 'createPembimbing']);
         Route::get('/users/peserta', [ParticipantAccountController::class, 'index']);
@@ -81,12 +78,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/admin/lokasi/{id}', [LokasiAbsensiController::class, 'update']);
         Route::delete('/admin/lokasi/{id}', [LokasiAbsensiController::class, 'destroy']);
         Route::patch('/admin/lokasi/{id}/toggle', [LokasiAbsensiController::class, 'toggleActive']);
-        Route::get('/admin/pengaturan-absensi', [LokasiAbsensiController::class, 'getSettings']);
-        Route::post('/admin/pengaturan-absensi', [LokasiAbsensiController::class, 'updateSettings']);
+        Route::get('/admin/pengaturan-kompresi', [PengaturanKompresiController::class, 'show']);
+        Route::put('/admin/pengaturan-kompresi', [PengaturanKompresiController::class, 'update']);
     });
 
+    Route::get('/pengaturan-kompresi', [PengaturanKompresiController::class, 'show']);
     Route::get('/lokasi-absensi', [LokasiAbsensiController::class, 'index']);
-    Route::get('/pengaturan-absensi', [LokasiAbsensiController::class, 'getSettings']);
 
     Route::get('/periode', [PeriodeController::class, 'index']);
     Route::middleware('role:admin')->group(function () {
@@ -97,13 +94,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:admin,pembimbing')->group(function () {
         Route::get('/pendaftaran', [PendaftaranController::class, 'index']);
+        Route::get('/pendaftaran/{id}/surat-pengantar/download', [PendaftaranController::class, 'downloadSuratPengantarById']);
     });
     Route::middleware('role:admin')->group(function () {
         Route::post('/pendaftaran/{id}/status', [PendaftaranController::class, 'update']);
-        Route::delete('/pendaftaran/{id}', [PendaftaranController::class, 'destroy']);
     });
     Route::middleware('role:peserta')->group(function () {
         Route::get('/pendaftaran/me', [PendaftaranController::class, 'myRegistration']);
+        Route::get('/pendaftaran/me/surat-pengantar/download', [PendaftaranController::class, 'downloadSuratPengantar']);
         Route::get('/pendaftaran/me/surat-balasan/download', [PendaftaranController::class, 'downloadReplyLetter']);
         Route::post('/pendaftaran', [PendaftaranController::class, 'store']);
         Route::put('/pendaftaran/cancel', [PendaftaranController::class, 'cancelRegistration']);
@@ -125,7 +123,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(['role:admin,pembimbing,peserta', 'active.internship'])->group(function () {
         Route::get('/magang', [MagangController::class, 'index']);
     });
-    Route::middleware('role:admin,pembimbing')->post('/magang', [MagangController::class, 'store']);
     Route::middleware(['role:admin,pembimbing,peserta', 'active.internship', 'reply.letter.received'])->group(function () {
         Route::get('/absensi/hari-ini', [AbsensiController::class, 'today']);
     });
@@ -136,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware('role:admin')->group(function () {
+        Route::post('/magang', [MagangController::class, 'store']);
         Route::apiResource('/pembimbing', PembimbingController::class);
         Route::post('/absensi', [AbsensiController::class, 'store']);
         Route::delete('/absensi/{id}', [AbsensiController::class, 'destroy']);
@@ -143,20 +141,10 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
-    Route::middleware('role:admin,pembimbing')->group(function () {
-        Route::get('/laporan-magang/pdf-assets', [PdfFinalSettingsController::class, 'show']);
-        Route::get('/laporan-magang/pdf-assets/signature', [PdfFinalSettingsController::class, 'signature']);
-        Route::post('/laporan-magang/pdf-assets', [PdfFinalSettingsController::class, 'store']);
-    });
-
     Route::middleware('role:admin,pembimbing,peserta')->group(function () {
         Route::get('/laporan-magang', [LaporanMagangController::class, 'index']);
         Route::get('/laporan-magang/{id}', [LaporanMagangController::class, 'show']);
         Route::get('/laporan-magang/{id}/download', [LaporanMagangController::class, 'download']);
-        Route::get('/laporan-magang/{id}/google-doc-pdf', [LaporanMagangController::class, 'downloadGoogleDocPdf']);
-        Route::post('/laporan-magang/{id}/final-pdf', [LaporanMagangController::class, 'saveFinalPdf'])->middleware('role:admin,pembimbing');
-        Route::delete('/laporan-magang/{id}', [LaporanMagangController::class, 'destroy']);
-        Route::get('/master-penilaian/aktif', [MasterPenilaianController::class, 'active']);
     });
 
     Route::middleware('role:peserta')->group(function () {
@@ -166,14 +154,10 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:admin,pembimbing')->group(function () {
         Route::post('/laporan-magang/{id}/review', [LaporanMagangController::class, 'review']);
-        Route::get('/master-penilaian', [MasterPenilaianController::class, 'index']);
-        Route::post('/master-penilaian', [MasterPenilaianController::class, 'store']);
-        Route::put('/master-penilaian/{id}', [MasterPenilaianController::class, 'update']);
-        Route::delete('/master-penilaian/{id}', [MasterPenilaianController::class, 'destroy']);
+        Route::delete('/laporan-magang/{id}', [LaporanMagangController::class, 'destroy']);
         Route::get('/penilaian', [PenilaianController::class, 'index']);
         Route::get('/penilaian/peserta', [PenilaianController::class, 'participants']);
         Route::post('/penilaian', [PenilaianController::class, 'store']);
-        Route::delete('/penilaian/peserta/{userId}', [PenilaianController::class, 'destroy']);
         Route::post('/penilaian/peserta/{userId}/pdf', [PenilaianController::class, 'uploadFinalAssessmentPdf']);
         Route::get('/penilaian/peserta/{userId}/pdf', [PenilaianController::class, 'downloadFinalAssessmentPdf']);
         Route::get('/rekapitulasi', [RekapitulasiController::class, 'index']);
@@ -202,5 +186,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/tugas/{id}/submit', [TugasController::class, 'submit']);
         Route::post('/tugas/{id}/submisi', [TugasController::class, 'submit']);
         Route::get('/submisi-saya', [TugasController::class, 'submisiSaya']);
+    });
+
+    // Logbook Harian Kegiatan Magang
+    Route::middleware('role:admin,pembimbing,peserta')->group(function () {
+        Route::get('/logbook', [LogbookController::class, 'index']);
+    });
+    Route::middleware(['role:peserta', 'active.internship'])->group(function () {
+        Route::post('/logbook', [LogbookController::class, 'store']);
+        Route::post('/logbook/{id}', [LogbookController::class, 'update']);
+        Route::put('/logbook/{id}', [LogbookController::class, 'update']);
+    });
+    Route::middleware('role:admin,peserta')->group(function () {
+        Route::delete('/logbook/{id}', [LogbookController::class, 'destroy']);
+    });
+    Route::middleware('role:admin,pembimbing')->group(function () {
+        Route::post('/logbook/{id}/verifikasi', [LogbookController::class, 'verify']);
+        Route::patch('/logbook/{id}/verifikasi', [LogbookController::class, 'verify']);
     });
 });

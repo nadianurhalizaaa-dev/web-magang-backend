@@ -84,23 +84,15 @@ class LokasiAbsensiController extends Controller
         ]);
     }
 
-    public function toggleActive(Request $request, $id): JsonResponse
+    public function toggleActive($id): JsonResponse
     {
         $location = LokasiAbsensi::findOrFail($id);
-
-        if ($request->has('is_active')) {
-            $location->is_active = filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN);
-        } else {
-            $location->is_active = ! $location->is_active;
-        }
-
+        $location->is_active = ! $location->is_active;
         $location->save();
-
-        $statusStr = $location->is_active ? 'diaktifkan' : 'dinonaktifkan';
 
         return response()->json([
             'status' => 'success',
-            'message' => "Lokasi {$location->nama_lokasi} berhasil {$statusStr}.",
+            'message' => 'Status aktif lokasi berhasil diubah.',
             'data' => $location,
         ]);
     }
@@ -113,52 +105,6 @@ class LokasiAbsensiController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Lokasi absensi berhasil dihapus.',
-        ]);
-    }
-
-    public function getSettings(): JsonResponse
-    {
-        $path = storage_path('app/attendance_settings.json');
-        $defaultSettings = [
-            'allow_zoom' => true,
-            'require_zoom_proof' => true,
-            'zoom_note' => 'Peserta yang sedang mengikuti rapat/kegiatan Zoom dapat melakukan absensi dengan melampirkan screenshot ruang Zoom.',
-        ];
-
-        if (file_exists($path)) {
-            $content = file_get_contents($path);
-            $settings = json_decode($content, true);
-            if (is_array($settings)) {
-                $defaultSettings = array_merge($defaultSettings, $settings);
-            }
-        }
-
-        return response()->json([
-            'status' => 'success',
-            'data' => $defaultSettings,
-        ]);
-    }
-
-    public function updateSettings(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'allow_zoom' => ['required', 'boolean'],
-            'require_zoom_proof' => ['required', 'boolean'],
-            'zoom_note' => ['nullable', 'string', 'max:500'],
-        ]);
-
-        $path = storage_path('app/attendance_settings.json');
-        $dir = dirname($path);
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
-        file_put_contents($path, json_encode($validated, JSON_PRETTY_PRINT));
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Kebijakan absensi daring (Zoom) berhasil disimpan.',
-            'data' => $validated,
         ]);
     }
 }

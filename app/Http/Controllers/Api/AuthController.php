@@ -50,7 +50,7 @@ class AuthController extends Controller
         $user = User::create([
             'name' => $validated['nama'] ?? $validated['name'],
             'email' => $validated['email'],
-            'nim' => ! empty($validated['nim']) ? trim($validated['nim']) : null,
+            'nim' => $validated['nim'] ?? null,
             'password' => Hash::make($validated['password']),
             'role' => 'peserta',
             'no_hp' => $validated['no_hp'] ?? null,
@@ -105,17 +105,18 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $identifier = $validated['email'];
-        if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
-            $user = User::with('magang')->where('email', $identifier)->first();
-        } else {
-            $user = User::with('magang')
-                ->whereHas('magang', function ($query) use ($identifier) {
-                    $query->where('participant_code', $identifier)
-                        ->where('status', 'Aktif');
-                })
-                ->first();
-        }
+        $identifier = trim($validated['email']);
+        
+        // Cari pengguna berdasarkan Email ATAU NPM/NIM (users.nim) ATAU Kode Peserta (magangs.participant_code)
+        $user = User::with('magang')
+            ->where(function ($query) use ($identifier) {
+                $query->where('email', $identifier)
+                    ->orWhere('nim', $identifier)
+                    ->orWhereHas('magang', function ($sub) use ($identifier) {
+                        $sub->where('participant_code', $identifier);
+                    });
+            })
+            ->first();
 
         if (! $user || ! Hash::check($validated['password'], $user->password)) {
             return response()->json([
@@ -160,6 +161,108 @@ class AuthController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => $this->presentUser($request->user()->load('magang')),
+        ]);
+    }
+
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'nama' => ['nullable', 'string', 'max:255'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'nim' => ['nullable', 'string', 'max:50', Rule::unique('users', 'nim')->ignore($user->id)],
+            'no_hp' => ['nullable', 'string', 'max:25'],
+            'program_studi' => ['nullable', 'string', 'max:255'],
+            'alamat' => ['nullable', 'string', 'max:500'],
+            'password' => ['nullable', 'string', 'min:6'],
+            'foto' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ], [
+            'nim.unique' => 'NIM/NPM tersebut sudah terdaftar pada akun peserta lain. Mohon periksa kembali NIM Anda.',
+            'email.unique' => 'Alamat email tersebut sudah digunakan oleh akun lain.',
+            'email.email' => 'Format email yang dimasukkan tidak valid.',
+            'password.min' => 'Kata sandi baru minimal harus 6 karakter.',
+            'foto.max' => 'Ukuran file foto maksimal adalah 5 MB.',
+            'foto.image' => 'File harus berupa gambar dengan format JPG, JPEG, PNG, atau WEBP.',
+        ]);
+
+        $name = $validated['nama'] ?? $validated['name'] ?? null;
+        if (!empty($name)) {
+            $user->name = $name;
+            $user->nama = $name;
+        }
+
+        if (!empty($validated['email'])) {
+            $user->email = $validated['email'];
+        }
+
+        if (array_key_exists('nim', $validated)) {
+            $user->nim = $validated['nim'];
+        }
+
+        if (array_key_exists('no_hp', $validated)) {
+            $user->no_hp = $validated['no_hp'];
+        }
+
+        if (array_key_exists('program_studi', $validated)) {
+            $user->program_studi = $validated['program_studi'];
+        }
+
+        if (array_key_exists('alamat', $validated)) {
+            $user->alamat = $validated['alamat'];
+        }
+
+        if (!empty($validated['password'])) {
+            $user->password = Hash::make($validated['password']);
+        }
+
+        if ($request->hasFile('foto')) {
+            $path = $request->file('foto')->store('avatars', 'public');
+            $user->foto = 'storage/' . $path;
+        }
+
+        try {
+            $user->save();
+        } catch (\Illuminate\Database\QueryException $e) {
+            $errorCode = $e->errorInfo[1] ?? 0;
+            if ($errorCode == 1062 || str_contains($e->getMessage(), 'Duplicate entry') || $e->getCode() == 23000) {
+                if (str_contains($e->getMessage(), 'users_nim_unique') || str_contains($e->getMessage(), 'nim')) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'NIM/NPM tersebut sudah terdaftar pada akun peserta lain. Silakan periksa kembali atau gunakan NIM Anda yang benar.',
+                        'errors' => ['nim' => ['NIM/NPM sudah terdaftar pada akun lain.']],
+                    ], 422);
+                }
+                if (str_contains($e->getMessage(), 'users_email_unique') || str_contains($e->getMessage(), 'email')) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Alamat email tersebut sudah terdaftar pada akun lain. Silakan gunakan alamat email yang berbeda.',
+                        'errors' => ['email' => ['Email sudah terdaftar pada akun lain.']],
+                    ], 422);
+                }
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Data yang dimasukkan (NIM atau Email) sudah terdaftar pada akun lain.',
+                ], 422);
+            }
+            throw $e;
+        }
+
+        if ($user->magang) {
+            try {
+                $user->magang->update([
+                    'participant_name' => $user->name,
+                ]);
+            } catch (\Throwable $th) {
+                // Ignore secondary sync failures
+            }
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Profil berhasil diperbarui!',
+            'data' => $this->presentUser($user->fresh()->load('magang')),
         ]);
     }
 

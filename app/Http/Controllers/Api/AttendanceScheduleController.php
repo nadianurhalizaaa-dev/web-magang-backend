@@ -22,25 +22,17 @@ class AttendanceScheduleController extends Controller
     public function updateForSupervisor(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'jam_masuk' => ['sometimes', 'required', 'date_format:H:i'],
-            'jam_pulang' => ['sometimes', 'required', 'date_format:H:i'],
+            'jam_pulang' => ['required', 'date_format:H:i'],
         ]);
-
-        if (! array_key_exists('jam_masuk', $validated) && ! array_key_exists('jam_pulang', $validated)) {
-            return response()->json([
-                'message' => 'Isi minimal satu jadwal absensi untuk diperbarui.',
-            ], 422);
-        }
 
         $schedule = AttendanceSchedule::updateOrCreate(
             ['pembimbing_id' => $request->user()->id],
-            $validated
+            ['jam_pulang' => $validated['jam_pulang']]
         );
 
         return response()->json([
-            'message' => 'Jadwal absensi berhasil diperbarui.',
+            'message' => 'Jam pulang absensi berhasil diperbarui.',
             'data' => [
-                'jam_masuk' => substr((string) $schedule->jam_masuk, 0, 5),
                 'jam_pulang' => substr((string) $schedule->jam_pulang, 0, 5),
             ],
         ]);
@@ -70,14 +62,13 @@ class AttendanceScheduleController extends Controller
 
     private function scheduleResponse(?int $pembimbingId): JsonResponse
     {
-        $schedule = $pembimbingId
-            ? AttendanceSchedule::where('pembimbing_id', $pembimbingId)->first()
+        $jamPulang = $pembimbingId
+            ? AttendanceSchedule::where('pembimbing_id', $pembimbingId)->value('jam_pulang')
             : null;
 
         return response()->json([
             'data' => [
-                'jam_masuk' => substr((string) ($schedule?->jam_masuk ?: AttendanceSchedule::DEFAULT_CHECK_IN_TIME), 0, 5),
-                'jam_pulang' => substr((string) ($schedule?->jam_pulang ?: self::DEFAULT_CHECKOUT_TIME), 0, 5),
+                'jam_pulang' => substr((string) ($jamPulang ?: self::DEFAULT_CHECKOUT_TIME), 0, 5),
             ],
         ]);
     }

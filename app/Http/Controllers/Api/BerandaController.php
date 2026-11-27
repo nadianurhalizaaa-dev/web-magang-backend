@@ -42,7 +42,7 @@ class BerandaController extends Controller
                     'alamat' => $profil->alamat,
                     'email' => $profil->email,
                     'telepon' => $profil->telepon,
-                    'instagram' => $profil->instagram,
+                    'website' => $profil->website,
                 ] : null,
                 'statistik' => [
                     'total_alumni' => $totalAlumni,
@@ -136,8 +136,6 @@ class BerandaController extends Controller
         $user = $request->user();
 
         $validator = Validator::make($request->all(), [
-            'nama_pengguna' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
             'rating' => 'required|integer|min:1|max:5',
             'komentar' => 'required|string',
         ]);

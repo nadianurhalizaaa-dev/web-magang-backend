@@ -143,7 +143,6 @@ class AbsensiController extends Controller
         $user = $request->user();
         $validated = $request->validate([
             'status' => ['nullable', 'in:Hadir,Tidak Hadir,Izin,Sakit'],
-            'tipe_kehadiran' => ['nullable', 'string', 'in:WFO,Zoom,Daring,WFH'],
             'keterangan' => ['nullable', 'string', 'max:255'],
             'foto' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
@@ -155,37 +154,11 @@ class AbsensiController extends Controller
             return $profile;
         }
 
-        $checkInTime = $profile['schedule_pembimbing_id']
-            ? AttendanceSchedule::where('pembimbing_id', $profile['schedule_pembimbing_id'])->value('jam_masuk')
-            : null;
-        $checkInTime = substr((string) ($checkInTime ?: AttendanceSchedule::DEFAULT_CHECK_IN_TIME), 0, 5);
-        $checkInDeadline = AttendanceSchedule::checkInDeadline($checkInTime);
-
-        if (now()->greaterThanOrEqualTo($checkInDeadline)) {
-            $deadlineLabel = $checkInDeadline->format('H:i');
-            $reason = "Tidak melakukan absensi masuk hingga pukul {$deadlineLabel}.";
-            $this->createAbsentRecordIfNotExists($user, $profile, today(), $reason);
-
-            $attendance = Absensi::where(function ($query) use ($user, $profile) {
-                $query->where('user_id', $user->id)
-                    ->orWhere('participant_code', $profile['participant_code']);
-            })
-                ->whereDate('tanggal', today())
-                ->first();
-
-            if ($attendance?->status === 'Tidak Hadir' && $attendance->keterangan === $reason) {
-                return response()->json([
-                    'message' => "Batas absensi masuk pukul {$deadlineLabel} telah lewat. Status Anda otomatis tercatat Tidak Hadir.",
-                    'data' => $attendance,
-                ], 422);
-            }
-        }
-
         $status = $validated['status'] ?? 'Hadir';
 
-        if ($status === 'Hadir' && now()->format('H:i') < $checkInTime) {
+        if ($status === 'Hadir' && now()->format('H:i') < '08:00') {
             return response()->json([
-                'message' => "Belum waktunya absen masuk. Absensi masuk hanya bisa dilakukan mulai jam {$checkInTime}.",
+                'message' => 'Belum waktunya absen masuk. Absensi masuk hanya bisa dilakukan mulai jam 08:00.',
             ], 422);
         }
 
@@ -199,38 +172,8 @@ class AbsensiController extends Controller
         $userLng = isset($validated['longitude']) ? (float) $validated['longitude'] : null;
         $geofenceDistance = null;
 
-        $tipeKehadiran = $validated['tipe_kehadiran'] ?? 'WFO';
-        $isZoomMode = in_array(strtolower((string) $tipeKehadiran), ['zoom', 'daring', 'wfh'], true);
-
-        // Ambil konfigurasi kebijakan absensi daring dari Admin
-        $settingsPath = storage_path('app/attendance_settings.json');
-        $attendanceSettings = [
-            'allow_zoom' => true,
-            'require_zoom_proof' => true,
-        ];
-        if (file_exists($settingsPath)) {
-            $decoded = json_decode(file_get_contents($settingsPath), true);
-            if (is_array($decoded)) {
-                $attendanceSettings = array_merge($attendanceSettings, $decoded);
-            }
-        }
-
-        // Jika memilih mode Zoom namun dinonaktifkan Admin
-        if ($isZoomMode && empty($attendanceSettings['allow_zoom'])) {
-            return response()->json([
-                'message' => 'Absensi Daring / Zoom saat ini dinonaktifkan oleh Administrator. Silakan lakukan absensi di lokasi kantor.',
-            ], 422);
-        }
-
-        // Jika memilih mode Zoom dan Admin mewajibkan bukti screenshot
-        if ($isZoomMode && ! empty($attendanceSettings['require_zoom_proof']) && ! $request->hasFile('foto')) {
-            return response()->json([
-                'message' => 'Wajib melampirkan screenshot layar rapat Zoom atau foto bukti kegiatan daring.',
-            ], 422);
-        }
-
-        // Validasi radius lokasi kantor hanya untuk kehadiran Hadir WFO (bukan Zoom)
-        if ($finalStatus === 'Hadir' && ! $isZoomMode) {
+        // Validasi radius lokasi kantor hanya untuk kehadiran Hadir
+        if ($finalStatus === 'Hadir') {
             $geofence = $this->validateGeofence($userLat, $userLng);
             if (! $geofence['valid']) {
                 return response()->json([
@@ -241,34 +184,9 @@ class AbsensiController extends Controller
                 ], 422);
             }
             $geofenceDistance = $geofence['distance'] ?? null;
-        } elseif ($finalStatus === 'Hadir' && $isZoomMode) {
-            // Untuk Zoom, hitung jarak sebagai log histori tanpa memblokir
-            if ($userLat !== null && $userLng !== null) {
-                $activeLocations = LokasiAbsensi::where('is_active', true)->get();
-                if ($activeLocations->isNotEmpty()) {
-                    $closest = null;
-                    foreach ($activeLocations as $loc) {
-                        $dist = $this->calculateDistance($userLat, $userLng, (float) $loc->latitude, (float) $loc->longitude);
-                        if ($closest === null || $dist < $closest) {
-                            $closest = $dist;
-                        }
-                    }
-                    $geofenceDistance = $closest ? round($closest) : null;
-                }
-            }
         }
 
         $photoPath = $request->file('foto')?->store('absensi', 'public');
-
-        $keteranganFinal = $validated['keterangan'] ?? null;
-        if ($isZoomMode) {
-            $prefix = '[ZOOM / DARING]';
-            if ($keteranganFinal && ! str_contains($keteranganFinal, $prefix)) {
-                $keteranganFinal = $prefix . ' ' . $keteranganFinal;
-            } elseif (! $keteranganFinal) {
-                $keteranganFinal = $prefix . ' Absensi kegiatan daring/Zoom';
-            }
-        }
 
         $attendance = Absensi::firstOrCreate(
             [
@@ -284,7 +202,7 @@ class AbsensiController extends Controller
                 'jam_masuk' => $isNotPresent ? null : now()->format('H:i:s'),
                 'status' => $finalStatus,
                 'approval_status' => $isLeaveRequest ? 'pending' : null,
-                'keterangan' => $keteranganFinal,
+                'keterangan' => $validated['keterangan'] ?? null,
                 'foto' => $photoPath,
                 'latitude' => $userLat,
                 'longitude' => $userLng,
@@ -408,9 +326,8 @@ class AbsensiController extends Controller
                 'status' => 'Hadir',
             ]);
         } else {
-            // Validasi lokasi pulang jika absensi masuk adalah Hadir WFO (bukan Daring / Zoom)
-            $isZoomAttendance = str_contains((string) $attendance->keterangan, '[ZOOM');
-            if ($attendance->status === 'Hadir' && ! $isZoomAttendance) {
+            // Validasi lokasi pulang jika absensi masuk adalah Hadir
+            if ($attendance->status === 'Hadir') {
                 $geofence = $this->validateGeofence($userLat, $userLng);
                 if (! $geofence['valid']) {
                     return response()->json([
@@ -603,20 +520,18 @@ class AbsensiController extends Controller
 
     private function validateGeofence(?float $lat, ?float $lng): array
     {
+        // Kebijakan fleksibel: Peserta dapat melakukan absensi di mana saja tanpa dibatasi radius kantor.
+        // Jika koordinat GPS tersedia, jarak tetap dihitung sebagai data catatan/monitoring.
         $activeLocations = LokasiAbsensi::where('is_active', true)->get();
 
-        if ($activeLocations->isEmpty()) {
-            return ['valid' => true, 'distance' => null, 'location' => null];
-        }
-
-        if ($lat === null || $lng === null) {
+        if ($activeLocations->isEmpty() || $lat === null || $lng === null) {
             return [
-                'valid' => false,
-                'message' => 'Titik koordinat GPS diperlukan untuk absensi Hadir. Mohon aktifkan izin lokasi di browser Anda.',
+                'valid' => true,
+                'distance' => null,
+                'location' => $activeLocations->first(),
             ];
         }
 
-        $isWithin = false;
         $closestDistance = null;
         $closestLocation = null;
 
@@ -626,29 +541,11 @@ class AbsensiController extends Controller
                 $closestDistance = $dist;
                 $closestLocation = $loc;
             }
-            if ($dist <= $loc->radius_meter) {
-                $isWithin = true;
-                $closestDistance = $dist;
-                $closestLocation = $loc;
-                break;
-            }
-        }
-
-        if (! $isWithin) {
-            $distRounded = round($closestDistance ?? 0);
-            $maxRadius = $closestLocation ? $closestLocation->radius_meter : 100;
-            $nama = $closestLocation ? $closestLocation->nama_lokasi : 'kantor';
-            return [
-                'valid' => false,
-                'distance' => $distRounded,
-                'location' => $closestLocation,
-                'message' => "Anda berada di luar radius absensi {$nama}. Jarak Anda saat ini: {$distRounded} meter (Maksimal radius: {$maxRadius} meter). Absensi kehadiran ditolak.",
-            ];
         }
 
         return [
             'valid' => true,
-            'distance' => round($closestDistance ?? 0),
+            'distance' => $closestDistance !== null ? round($closestDistance) : null,
             'location' => $closestLocation,
         ];
     }
@@ -674,7 +571,7 @@ class AbsensiController extends Controller
                 'tanggal' => $date,
                 'jam_masuk' => null,
                 'jam_pulang' => null,
-                'status' => 'Tidak Hadir',
+                'status' => 'Alpa',
                 'keterangan' => $reason,
             ]);
         }
@@ -682,23 +579,17 @@ class AbsensiController extends Controller
 
     private function autoMarkAbsentForUserIfDayEnded(User $user, array $profile): void
     {
-        // 1. Hari ini: tandai Tidak Hadir setelah masa absensi masuk berakhir.
-        $checkInTime = $profile['schedule_pembimbing_id']
-            ? AttendanceSchedule::where('pembimbing_id', $profile['schedule_pembimbing_id'])->value('jam_masuk')
+        $checkoutTime = $profile['schedule_pembimbing_id']
+            ? AttendanceSchedule::where('pembimbing_id', $profile['schedule_pembimbing_id'])->value('jam_pulang')
             : null;
-        $checkInDeadline = AttendanceSchedule::checkInDeadline($checkInTime);
+        $checkoutTime = substr((string) ($checkoutTime ?: '17:00'), 0, 5);
 
-        if (now()->greaterThanOrEqualTo($checkInDeadline)) {
-            $reason = 'Tidak melakukan absensi masuk hingga pukul '.$checkInDeadline->format('H:i').'.';
-            $this->createAbsentRecordIfNotExists(
-                $user,
-                $profile,
-                today(),
-                $reason
-            );
+        // 1. Hari ini: jika sudah melewati jam pulang dan belum melakukan absensi masuk
+        if (now()->format('H:i') >= $checkoutTime) {
+            $this->createAbsentRecordIfNotExists($user, $profile, today(), 'Tidak hadir dan tidak ada keterangan seharian.');
         }
 
-        // 2. Hari-hari kerja sebelumnya yang terlewat tanpa absensi.
+        // 2. Hari-hari kerja sebelumnya yang terlewat tanpa absensi (otomatis Alpa)
         $registration = $user->pendaftarans()->where('status', 'Pemagang Aktif')->latest('id')->first();
         if ($registration && $registration->tanggal_daftar) {
             $startDate = \Carbon\Carbon::parse($registration->tanggal_daftar)->startOfDay();

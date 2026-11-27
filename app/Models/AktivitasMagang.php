@@ -19,10 +19,11 @@ class AktivitasMagang extends Model
         'kategori',
         'lokasi',
         'foto',
+        'video',
         'status',
     ];
 
-    protected $appends = ['foto_url'];
+    protected $appends = ['foto_url', 'video_url'];
 
     /**
      * Accessor untuk mendapatkan URL lengkap foto aktivitas.
@@ -33,6 +34,22 @@ class AktivitasMagang extends Model
             return asset($this->foto);
         }
         return null;
+    }
+
+    /**
+     * Accessor untuk mendapatkan URL lengkap video aktivitas.
+     */
+    public function getVideoUrlAttribute()
+    {
+        if (! $this->video) {
+            return null;
+        }
+
+        if (str_starts_with($this->video, 'http://') || str_starts_with($this->video, 'https://')) {
+            return $this->video;
+        }
+
+        return asset($this->video);
     }
 
     /**

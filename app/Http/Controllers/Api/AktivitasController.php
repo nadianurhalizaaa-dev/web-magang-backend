@@ -20,9 +20,10 @@ class AktivitasController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = AktivitasMagang::where('status', 'active')
-            ->with(['user:id,name,email'])
-            ->withCount('komentar');
+        // Hanya tampilkan aktivitas dengan status 'active' di halaman publik
+        $query = AktivitasMagang::with(['user:id,name,email'])
+            ->withCount('komentar')
+            ->where('status', 'active');
 
         if ($request->has('search') && !empty($request->search)) {
             $search = $request->search;
@@ -56,10 +57,10 @@ class AktivitasController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $aktivitas = AktivitasMagang::where('status', 'active')->with([
+        $aktivitas = AktivitasMagang::with([
             'user:id,name,email',
             'komentar.user:id,name,email'
-        ])->find($id);
+        ])->where('status', 'active')->find($id);
 
         if (!$aktivitas) {
             return response()->json([
@@ -76,8 +77,8 @@ class AktivitasController extends Controller
     }
 
     /**
-     * User submits a comment on an Aktivitas Magang input by Admin.
-     * Requires Sanctum Authentication (auth:sanctum).
+     * Submit a comment on an Aktivitas Magang.
+     * Accessible by both logged-in users and public guests.
      *
      * @param Request $request
      * @param int $id
@@ -94,9 +95,20 @@ class AktivitasController extends Controller
             ], 404);
         }
 
-        $validator = Validator::make($request->all(), [
+        // Cek apakah ada pengguna yang login via Sanctum
+        $user = auth('sanctum')->user() ?? $request->user();
+
+        $rules = [
             'komentar' => 'required|string|min:3',
-        ]);
+        ];
+
+        // Jika belum login, email wajib diisi
+        if (!$user) {
+            $rules['email'] = 'required|email|max:255';
+            $rules['nama_pengguna'] = 'nullable|string|max:100';
+        }
+
+        $validator = Validator::make($request->all(), $rules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -106,9 +118,26 @@ class AktivitasController extends Controller
             ], 422);
         }
 
+        $userId = $user ? $user->id : null;
+        $email = $user ? $user->email : $request->email;
+
+        // Jika guest menginput email yang sudah terdaftar di users, sambungkan user_id
+        if (!$userId && $email) {
+            $matchedUser = \App\Models\User::where('email', $email)->first();
+            if ($matchedUser) {
+                $userId = $matchedUser->id;
+            }
+        }
+
+        $namaPengguna = $user 
+            ? $user->name 
+            : ($request->nama_pengguna ?: (explode('@', $email)[0] ?? 'Pengunjung'));
+
         $komentar = KomentarAktivitas::create([
             'aktivitas_magang_id' => $aktivitas->id,
-            'user_id' => $request->user()->id,
+            'user_id' => $userId,
+            'nama_pengguna' => $namaPengguna,
+            'email' => $email,
             'komentar' => $request->komentar,
         ]);
 

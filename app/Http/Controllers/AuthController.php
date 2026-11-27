@@ -11,15 +11,18 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $validated = $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::where('email', $validated['email'])->first();
+        $identifier = trim($validated['email']);
+        $user = User::where('email', $identifier)
+            ->orWhere('nim', $identifier)
+            ->first();
 
         if (! $user || ! Hash::check($validated['password'], $user->password)) {
             return response()->json([
-                'message' => 'Email atau password salah',
+                'message' => 'Email/NPM atau password salah',
             ], 401);
         }
 

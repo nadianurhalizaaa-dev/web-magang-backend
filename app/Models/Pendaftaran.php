@@ -20,8 +20,6 @@ class Pendaftaran extends Model
         'tanggal_selesai',
         'file_surat_balasan',
         'surat_balasan_diterima_at',
-        'surat_balasan_email_terkirim_at',
-        'surat_balasan_whatsapp_terkirim_at',
         'penilaian_akhir_pdf',
     ];
 

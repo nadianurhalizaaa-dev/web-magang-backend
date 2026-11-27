@@ -5,7 +5,17 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('attendance:mark-absent')
-    ->everyMinute()
+    ->dailyAt('08:00')
+    ->timezone(config('app.timezone'))
+    ->withoutOverlapping();
+
+Schedule::command('attendance:mark-absent')
+    ->dailyAt('17:00')
+    ->timezone(config('app.timezone'))
+    ->withoutOverlapping();
+
+Schedule::command('attendance:mark-absent')
+    ->dailyAt('23:59')
     ->timezone(config('app.timezone'))
     ->withoutOverlapping();
 

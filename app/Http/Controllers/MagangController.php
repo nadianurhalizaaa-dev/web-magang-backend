@@ -20,7 +20,6 @@ class MagangController extends Controller
                 ->map(fn (Pendaftaran $pendaftaran) => [
                     'id' => $pendaftaran->id,
                     'participant_code' => 'USER-' . $pendaftaran->user_id,
-                    'nim' => $pendaftaran->user->nim,
                     'participant_name' => $pendaftaran->user->name,
                     'institution' => $pendaftaran->asal_instansi,
                     'status' => 'Aktif',
@@ -41,7 +40,6 @@ class MagangController extends Controller
             'participant_code' => ['required', 'string', 'max:30', 'unique:magangs,participant_code'],
             'participant_name' => ['required', 'string', 'max:100'],
             'institution' => ['nullable', 'string', 'max:120'],
-            'periode_id' => ['nullable', 'integer', 'exists:periode_magangs,id'],
         ]);
 
         $magang = Magang::create($validated);
